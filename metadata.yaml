@@ -1,0 +1,26 @@
+name: astrbot_plugin_fatfish_groupadmin
+display_name: 鱼力max · 群管说了算
+desc: 群主让它安静它照样插嘴、群友说别接我的话它还接：装上以后群里的人说话算数。群主 / 管理员 @ 它说「安静点 / 闭嘴」→ 这个群只回 @ 或谁都不回，到点自己恢复；群友「别理我」只对他生效；被 QQ 禁言时什么都不发。细节和配置见 README。
+short_desc: 群里的人管机器人：说安静就安静
+version: v0.1.0
+author: Vegra85
+repo: https://github.com/Vegra85/astrbot_plugin_fatfish_groupadmin
+license: MIT
+astrbot_version: ">=4.29,<5"
+support_platforms:
+  - aiocqhttp
+social_link: https://github.com/Vegra85
+category: 工具
+tags:
+  - 鱼力max
+  - 大肥鱼
+  - DeepSeek
+  - 群管
+  - 群聊
+  - 安静
+  - 闭嘴
+  - 静音
+  - 禁言
+  - 防刷屏
+  - 插嘴
+  - 别理我

@@ -1,0 +1,69 @@
+{
+  "enabled": {
+    "description": "开启 鱼力max · 群管说了算",
+    "type": "bool",
+    "default": true,
+    "hint": "关掉以后什么都不管：群管说安静不算、群友说别接我也不算、被禁言了也照常叫模型（发不出去）。"
+  },
+  "quiet_default_min": {
+    "description": "没说多久时，安静 / 静音几分钟",
+    "type": "int",
+    "default": 30,
+    "hint": "群管只说了「安静点」「闭嘴」没说多久，就按这么多分钟，到点自己恢复。说了「一小时」「到晚上」「到 8 点」就按他说的。"
+  },
+  "max_hours": {
+    "description": "安静 / 静音最长几小时",
+    "type": "float",
+    "default": 24,
+    "hint": "群管说「以后都别说了」「闭嘴三天」也最多这么久，到点自己恢复。想让它在某个群长期不说话，用 AstrBot 自己的会话管理关掉那个群。"
+  },
+  "hush_hours": {
+    "description": "群友「别接我的话」管几小时",
+    "type": "float",
+    "default": 24,
+    "hint": "有人说「别理我 / 别接我的话 / 别 @ 我」：这么久里他没 @ 它、没引用它的话，它不主动接（他 @ 它照回）。他说了多久就按他说的（最长 7 天）；他说「可以理我了」马上撤。"
+  },
+  "owner_counts": {
+    "description": "群主说了算",
+    "type": "bool",
+    "default": true,
+    "hint": "QQ 群主（NapCat 给的身份）@ 它或叫它名字说「安静点 / 闭嘴 / 可以说话了」算数。"
+  },
+  "admin_counts": {
+    "description": "群管理员说了算",
+    "type": "bool",
+    "default": true,
+    "hint": "QQ 群管理员说的算数。只看 QQ 给的身份，嘴上说「我是管理」不算；认 AI 认出来的别人家的机器人就算是管理员也不算。"
+  },
+  "astrbot_admin_counts": {
+    "description": "AstrBot 管理员说了算",
+    "type": "bool",
+    "default": true,
+    "hint": "AstrBot 配置里「管理员 ID」里的人，在哪个群说都算（不管他在群里是什么身份）。"
+  },
+  "names": {
+    "description": "它的名字 / 外号",
+    "type": "list",
+    "default": [],
+    "hint": "群管不 @ 它、只叫名字说「小鱼安静点」也算。它的 QQ 昵称和在群里的名片会自己查，这里填别的叫法。至少 2 个字（一个字太容易误认）。"
+  },
+  "use_llm": {
+    "description": "规则拿不准时问一次模型（默认关）",
+    "type": "bool",
+    "default": false,
+    "hint": "「可以说话了吗」「你怎么还不安静」这种问句、又让安静又让恢复的，规则拿不准就不改。开了会问一次模型（每个群每小时最多 10 次，同一句 10 分钟内不重复问）；改不改、谁有权改还是按身份卡，模型说了不算。"
+  },
+  "judge_provider_id": {
+    "description": "拿不准时问哪个模型",
+    "type": "string",
+    "default": "",
+    "_special": "select_provider",
+    "hint": "只在上面那项开着时用。留空 = 用这个群当前的对话模型；换成便宜的小模型也行（一次几百 token）。"
+  },
+  "notice": {
+    "description": "改了状态时发一句系统提示（默认关）",
+    "type": "bool",
+    "default": false,
+    "hint": "开了以后，群管让它安静 / 恢复、群友说别接他的话时，插件自己在群里发一句「（系统提示）本群进入「安静」，到 14:32……」。关着时只有模型自己回那一句（它知道谁让它怎样、到几点）。"
+  }
+}

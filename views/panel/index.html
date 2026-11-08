@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>群管说了算</title>
+<style>
+  :root { --bg:#ffffff; --fg:#1f2328; --muted:#656d76; --line:#e5e7eb; --card:#f6f8fa; --accent:#2563eb; --bad:#c2410c; --ok:#15803d; }
+  html[data-theme="dark"] { --bg:#16181d; --fg:#e6e6e6; --muted:#9aa4b2; --line:#2c313a; --card:#1e2128; --accent:#60a5fa; --bad:#fb923c; --ok:#4ade80; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.6 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  h2 { font-size:15px; margin:22px 0 8px; }
+  .sub { color:var(--muted); margin:0 0 14px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .card b { display:block; font-size:22px; }
+  .card span { color:var(--muted); font-size:12px; }
+  .wrap { overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table { border-collapse:collapse; width:100%; min-width:620px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; background:var(--card); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .empty { color:var(--muted); padding:10px; }
+  .tag { display:inline-block; padding:0 6px; border-radius:6px; font-size:12px; border:1px solid var(--line); white-space:nowrap; }
+  .tag.quiet { color:var(--accent); border-color:var(--accent); }
+  .tag.mute, .tag.ban { color:var(--bad); border-color:var(--bad); }
+  button { font:inherit; font-size:12px; padding:3px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--fg); cursor:pointer; margin:0 4px 2px 0; }
+  button:hover { border-color:var(--accent); color:var(--accent); }
+  .log { padding-left:18px; margin:0; }
+  .log li { margin:2px 0; }
+  .muted { color:var(--muted); }
+  #err { color:var(--bad); }
+</style>
+</head>
+<body>
+<h1>群管说了算</h1>
+<p class="sub">群里的人管机器人：群主 / 管理员 @ 它说「安静点 / 闭嘴」，这个群就只回 @（或谁都不回），到点自己恢复；群友说「别接我的话」只对他生效；被 QQ 禁言时什么都不发。</p>
+<div id="err"></div>
+<div class="cards">
+  <div class="card"><b id="n-quiet">-</b><span>在安静 / 静音的群</span></div>
+  <div class="card"><b id="n-ban">-</b><span>被禁言的群</span></div>
+  <div class="card"><b id="n-hush">-</b><span>说了「别接我的话」的人</span></div>
+  <div class="card"><b id="allowed" style="font-size:14px">-</b><span>谁说了算</span></div>
+</div>
+
+<h2>各个群</h2>
+<div class="wrap"><table id="t-groups"></table></div>
+
+<h2>最近发生的</h2>
+<ul class="log" id="log"></ul>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+  const ago = (t) => {
+    if (!t) return "";
+    const s = Math.max(0, Math.floor(Date.now() / 1000 - t));
+    if (s < 60) return s + " 秒前";
+    if (s < 3600) return Math.floor(s / 60) + " 分钟前";
+    if (s < 86400) return Math.floor(s / 3600) + " 小时前";
+    return Math.floor(s / 86400) + " 天前";
+  };
+  const left = (s) => s >= 3600 ? Math.floor(s / 3600) + " 小时 " + Math.floor((s % 3600) / 60) + " 分钟" : Math.max(1, Math.ceil(s / 60)) + " 分钟";
+  const btn = (op, gk, label, uid) => '<button data-op="' + op + '" data-gk="' + esc(gk) + '"' + (uid ? ' data-uid="' + esc(uid) + '"' : "") + ">" + esc(label) + "</button>";
+  let api = null;
+
+  function render(d) {
+    const gs = d.groups || [];
+    $("n-quiet").textContent = gs.filter((g) => g.mode).length;
+    $("n-ban").textContent = gs.filter((g) => g.ban).length;
+    $("n-hush").textContent = gs.reduce((n, g) => n + (g.hush || []).length, 0);
+    $("allowed").textContent = d.allowed || "-";
+    const t = $("t-groups");
+    if (!gs.length) {
+      t.innerHTML = '<tr><td class="empty">现在没有哪个群在安静、被禁言，也没人说别接他的话。' + (d.enabled ? "" : "（总开关关着）") + "</td></tr>";
+    } else {
+      t.innerHTML = "<tr><th>群</th><th>状态</th><th>谁设的 / 原话</th><th>到几点</th><th>QQ 禁言</th><th>说了别接他话的</th><th></th></tr>" +
+        gs.map((g) => "<tr><td>" + esc(g.gid) + "</td><td>" +
+          (g.mode ? '<span class="tag ' + esc(g.mode) + '">' + esc(g.mode_name) + "</span>" : '<span class="muted">正常</span>') +
+          "</td><td>" + esc(g.by) + (g.said ? '<br><span class="muted">「' + esc(g.said) + "」</span>" : "") + "</td><td>" +
+          (g.mode ? esc(g.until_text) + '<br><span class="muted">还有 ' + left(g.left) + "</span>" : "") + "</td><td>" +
+          (g.ban ? '<span class="tag ban">' + (g.ban.whole ? "全员禁言" : "被禁言") + "</span> " + esc(g.ban.until_text) : '<span class="muted">没有</span>') +
+          "</td><td>" + ((g.hush || []).map((h) => esc(h.name) + ' <span class="muted">到 ' + esc(h.until_text) + "</span> " + btn("unhush", g.gk, "撤", h.uid)).join("<br>") || '<span class="muted">没有</span>') +
+          "</td><td>" + (g.mode ? btn("clear", g.gk, "解除") : "") + (g.ban ? btn("unban", g.gk, "清掉禁言记录") : "") + "</td></tr>").join("");
+    }
+    $("log").innerHTML = (d.log || []).map((e) => '<li><span class="muted">' + ago(e.t) + "</span> " + esc(e.text) + "</li>").join("") ||
+      '<li class="muted">还没有。</li>';
+  }
+
+  async function load() {
+    try { render(await api.apiGet("state")); $("err").textContent = ""; }
+    catch (e) { $("err").textContent = "读不到插件状态：" + (e && e.message ? e.message : e); }
+  }
+
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("button[data-op]");
+    if (!b || !api) return;
+    b.disabled = true;
+    try { render(await api.apiPost("action", { op: b.dataset.op, gk: b.dataset.gk, uid: b.dataset.uid || "" })); }
+    catch (e) { $("err").textContent = "没改成：" + (e && e.message ? e.message : e); }
+    finally { b.disabled = false; }
+  });
+
+  async function start() {
+    for (let i = 0; i < 50 && !window.AstrBotPluginView; i++) await new Promise((r) => setTimeout(r, 100));
+    api = window.AstrBotPluginView;
+    if (!api) { $("err").textContent = "这个页面要在 AstrBot 的插件页面里打开。"; return; }
+    await api.ready();
+    await load();
+    setInterval(load, 15000);
+  }
+  window.addEventListener("load", start);
+})();
+</script>
+</body>
+</html>
