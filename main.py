@@ -49,7 +49,7 @@ from .core.state import MODE_NAME, RANK, UNKNOWN_BAN_SEC, GroupStore
 from .core.when import clamp_span, hhmm, parse_span, resolve_tz, span_text
 
 PLUGIN_NAME = "astrbot_plugin_fatfish_groupadmin"
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 TAG = "[群管说了算]"
 AIGUARD = "astrbot_plugin_fatfish_aiguard"
 WAIT_PRIORITY = 2000000
@@ -607,7 +607,8 @@ class FatfishGroupAdmin(Star):
         f = self._flags(event)
         if not f["text"]:
             return
-        called = names_called(f["text"], self._names(event, gk))
+        names = self._names(event, gk)
+        called = names_called(f["text"], names)
         direct = f["at_me"] or f["quoted_me"]
         admin, role, rank = self._rank(event)
         hushed = self.store.hushed(gk, uid, now)
@@ -622,6 +623,7 @@ class FatfishGroupAdmin(Star):
             restricted=restricted,
             recent=recent,
             hushed=bool(hushed),
+            names=names,  # v0.1.1：认话前先把它的名字拿掉（「小鱼恢复」）
         )
         if v.kind is None and v.sure:
             return
@@ -757,10 +759,15 @@ class FatfishGroupAdmin(Star):
                 ),
                 20,
             )
-            return parse_judge(getattr(resp, "completion_text", "") or "")
+            res = parse_judge(getattr(resp, "completion_text", "") or "")
         except Exception as e:
             logger.warning(f"{TAG} 问模型没问成：{e!r}"[:200])
-            return None
+            res = None
+        if res is None and key in self._judged:
+            # v0.1.1：没问成（超时 / 报错 / 回的看不懂）不算问过：同一句过 1 分钟可以再问（以前 10 分钟内不再问）。
+            # 每小时的名额照占，模型挂着的时候不会被刷
+            self._judged[key] = now - 540
+        return res
 
     async def _on_ban(self, event, raw):
         """QQ 的禁言 / 解禁通知：只管它自己被禁言、全员禁言（它是群主 / 管理时全员禁言管不到它）"""

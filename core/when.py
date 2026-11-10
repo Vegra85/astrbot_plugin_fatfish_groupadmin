@@ -71,9 +71,9 @@ _DUR = re.compile(
     + r")(?![a-zA-Z])",
     re.I,
 )
-_DUR_FEN = re.compile(r"(\d+)\s*分(?!钟|之)")  # 「10分」
+_DUR_FEN = re.compile(r"(\d+)\s*分(?!钟|之|制|数)")  # 「10分」
 _QUARTER = re.compile(r"(一|1)\s*刻钟")
-_HALF_DAY = re.compile(r"半天")
+_HALF_DAY = re.compile(r"(?<![了老])半天(?![了也都没不])")  # v0.1.1：「说了半天了」「半天不说话」是「好久」，不是 12 小时
 # 「一直」单说多半是「你一直在刷屏」，只认后面紧跟着「别 / 不要 / 闭嘴 / 安静」的
 _FOREVER = re.compile(r"永远|以后都|再也(?:别|不要|不许)|永久|从此|一直(?:别|不要|不许|闭嘴|安静)")
 _VAGUE = re.compile(r"一会儿?|一下下?|片刻|一阵子?|会儿")
@@ -94,8 +94,26 @@ _CLOCK = re.compile(
 # 「8 点以后再说话」「晚上 8 点前别说话」
 _CLOCK_AFTER = re.compile(
     r"(今天|今日|今晚|明天|明早|明晚|后天)?\s*(" + _PERIODS + r")?\s*" + _HOUR
-    + r"\s*(?:以后|之后|后|以前|之前|前|再)"
+    + r"\s*(?:以后|之后|后|以前|之前|前|再|(?:自己|自动|就)?(?:恢复|解除|解禁))"
 )
+# v0.1.1：随口说的不是时长 ——「一天到晚」「前两天」「这两天你话太多」不是一天 / 两天（「这三天安静点」「这一天别说话」还是时长）；
+# 「安静一点再吵…」「少说一点后面…」的「一点」是「一些」，不是 1 点钟
+_NOT_SPAN = re.compile(
+    r"一天到晚|一天到头|一天天|一天比一天|一天不如一天|三天两头|一年到头"
+    r"|(?:前|近)(?:\d+|[一二两俩三四五六七八九十]+)天"
+    r"|(?:这|那)(?:\d+|[一二两俩三四五六七八九十]+)天(?!你?(?:安静|闭嘴|静音|禁言|少说|别|不要|不许|不准|都别|先别|就别|给我)|内|里|之内)"
+)
+_ONE_OCLOCK_HEAD = " \t\r\n　，,。.!！?？~～、；;:：你等过"
+
+
+def _is_some(s, m):
+    """这个「一点」是不是「一些」：光一个「一点」（没说上午下午、没带几分），前面又紧挨着别的字（安静一点 / 少说一点）"""
+    if m.group(3) != "一" or m.group(1) or m.group(2) or m.group(4):
+        return False
+    i = m.start(3)
+    return i > 0 and s[i - 1] not in _ONE_OCLOCK_HEAD and s[max(0, i - 2):i] != "过了"
+
+
 # 「到晚上」「到明天」「到明天早上」
 _TO_PERIOD = re.compile(
     _TO + r"\s*(今天|今日|今晚|明天|明早|明晚|后天)?\s*(" + _PERIODS + r")?"
@@ -198,7 +216,8 @@ def parse_span(text, now_ts, tz=None):
         now_dt = datetime.fromtimestamp(float(now_ts), tz)
     except Exception:  # noqa: BLE001  时区坏了也不能连累认指令
         now_dt = datetime.fromtimestamp(float(now_ts))
-    m = _CLOCK.search(s) or _CLOCK_AFTER.search(s)
+    s = _NOT_SPAN.sub(lambda x: "〇" * len(x.group(0)), s)
+    m = _CLOCK.search(s) or next((x for x in _CLOCK_AFTER.finditer(s) if not _is_some(s, x)), None)
     if m:
         day_word, period, hour, minute = m.group(1), m.group(2), m.group(3), m.group(4)
         hv = cn_num(hour)
@@ -222,7 +241,7 @@ def parse_span(text, now_ts, tz=None):
     total, hit = 0.0, []
     for m in _DUR.finditer(s):
         n = cn_num(m.group(1))
-        if n is None:
+        if n is None or (m.group(1) == "半" and m.group(3) in ("天", "日")):  # 「半天」上面认过了（「说了半天了」不算）
             continue
         if m.group(2) == "个半":
             n += 0.5
@@ -234,6 +253,8 @@ def parse_span(text, now_ts, tz=None):
         hit.append(m.group(0).strip())
     if not hit:
         for m in _DUR_FEN.finditer(s):
+            if s[: m.start()].rstrip()[-1:] in tuple("打得扣加评考减"):  # v0.1.1：「给你打 10 分」是打分，不是 10 分钟
+                continue
             total += float(m.group(1)) * 60
             hit.append(m.group(0))
     if hit and total > 0:
